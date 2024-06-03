@@ -81,6 +81,7 @@ def fetch_workflow_states(states_url):
     return states_counts
 
 
+# Fetch document data once and use for all charts
 df_documents = pd.DataFrame(fetch_data(urls['documents']))
 
 # Ensure datetime_created is in datetime format
@@ -247,6 +248,7 @@ elif option == "Cabinet Document Distribution":
         fig_cabinets = px.treemap(df_cabinet_documents, path=[px.Constant("All Cabinets"), 'parent', 'label'], values='document_count',
                                   title="Cabinet Document Distribution", hover_data={'label': True, 'document_count': True}, height=600, width=900)
         st.plotly_chart(fig_cabinets)
+
 elif option == "Document Tags":
     st.header('Document Tags')
     df_tags = pd.DataFrame(fetch_data(urls['tags']))
