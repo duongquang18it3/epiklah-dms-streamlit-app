@@ -65,25 +65,40 @@ def get_metadata_types(doc_type_id):
         return response.json()['results']
     else:
         return []
+def get_cabinets():
+    url = "http://edms-demo.epik.live/api/v4/cabinets/"
+    response = requests.get(url, auth=('admin', '1234@BCD'))
+    if response.status_code == 200:
+        return response.json()['results']
+    else:
+        return []
 
-def save_to_json(file_base64, file_name, doc_type_id, metadata_values):
-    """Save data to a JSON file with the specified structure."""
+def get_tags():
+    url = "http://edms-demo.epik.live/api/v4/tags/"
+    response = requests.get(url, auth=('admin', '1234@BCD'))
+    if response.status_code == 200:
+        return response.json()['results']
+    else:
+        return []
+    
+def save_to_json(file_base64, file_name, doc_type_id, cabinet, tag, metadata_values):
     metadata_list = [{"id": id, "value": value} for id, value in metadata_values.items()]
     data = {
         "file_base64": file_base64,
-        "dms_domain": "edms-demo.epik.live",
+        "dms_domain": "sagawa.epik.live",
         "file_name": file_name,
         "doctype_id": doc_type_id,
+        "cabinet": cabinet,
+        "tag": tag,
         "docmeta_data": metadata_list
     }
     with open('data.json', 'w') as json_file:
         json.dump(data, json_file)
-
-def save_and_download_json(file_base64, file_name, doc_type_id, metadata_values):
-    """Save and download the generated JSON file."""
+        
+def save_and_download_json(file_base64, file_name, doc_type_id, cabinet, tag, metadata_values):
     progress_text = st.markdown(" ***Please wait a moment for the data submission process.***")
     progress_bar = st.progress(0)
-    save_to_json(file_base64, file_name, doc_type_id, metadata_values)
+    save_to_json(file_base64, file_name, doc_type_id, cabinet, tag, metadata_values)
     
     progress_bar.progress(40) 
     with open('data.json', 'rb') as f:
@@ -92,15 +107,14 @@ def save_and_download_json(file_base64, file_name, doc_type_id, metadata_values)
     st.download_button(label="Download JSON", data=data, file_name="data.json", mime="application/json")
     json_data = json.loads(data)
     
-    # Sending the data to the API endpoint
     response = send_data_to_api(json_data)
     if response.status_code == 200:
-        
         progress_bar.progress(100)
-        progress_text.markdown(" :green[Data submission completed successfully!]")  # Complete the progress bar only if API call is successful
+        progress_text.markdown(" :green[Data submission completed successfully!]")
     else:
         st.error(f"Failed to send data to the API: {response.status_code}")
         progress_bar.progress(0)
+
 def send_data_to_api(json_data):
     """Send JSON data to a specified API endpoint."""
     url = "https://dms.api.epik.live/api/processBase64File"
@@ -114,6 +128,12 @@ def main():
     document_types = get_document_types()
     doc_type_options = {doc['label']: doc['id'] for doc in document_types}
 
+    cabinets = get_cabinets()
+    cabinet_options = {cab['label']: cab['label'] for cab in cabinets}
+
+    tags = get_tags()
+    tag_options = {tag['label']: tag['label'] for tag in tags}
+
     col_title1, col_title2 = st.columns([1,8])
     with col_title2:
         st.title('Document Viewer App')
@@ -121,6 +141,9 @@ def main():
     col_empty_1, col_select, col_upload, col_empty_4 = st.columns([1,4,4,1])
     with col_select:
         doc_type = st.selectbox("Choose the document type:", list(doc_type_options.keys()), key='doc_type')
+        selected_cabinet = st.selectbox("Choose the document cabinet:", list(cabinet_options.keys()), key='cabinet')
+        selected_tag = st.selectbox("Choose the document tag:", list(tag_options.keys()), key='tag')
+
     with col_upload:
         uploaded_file = st.file_uploader("Upload your document", type=['png', 'jpg', 'jpeg', 'pdf'], key="uploaded_file")
 
@@ -138,6 +161,7 @@ def main():
 
     with col3_input_filed:
         if doc_type and uploaded_file:
+            
             metadata_types = get_metadata_types(doc_type_options[doc_type])
             metadata_values = {}
 
@@ -163,8 +187,7 @@ def main():
                     )
 
             if st.button("Done and Submit", type="primary"):
-                # Perform validation and handle submission
-                handle_submission(uploaded_file, doc_type_options[doc_type], metadata_values)
+                handle_submission(uploaded_file, doc_type_options[doc_type], selected_cabinet, selected_tag, metadata_values)
 
 def display_pdf(uploaded_file):
     try:
@@ -205,8 +228,7 @@ def display_image(uploaded_file):
     image = image.filter(ImageFilter.SHARPEN)
     st.image(image, caption='Uploaded Image', use_column_width=True)
 
-def handle_submission(uploaded_file, doc_type_id, metadata_values):
-    # Assuming 'get_metadata_types' returns the full metadata configuration for the document type
+def handle_submission(uploaded_file, doc_type_id, cabinet, tag, metadata_values):
     metadata_types = get_metadata_types(doc_type_id)
     valid = True
     error_messages = []
@@ -214,14 +236,12 @@ def handle_submission(uploaded_file, doc_type_id, metadata_values):
     for meta_id, value in metadata_values.items():
         meta_info = next((m for m in metadata_types if m['metadata_type']['id'] == meta_id), None)
         if not meta_info:
-            continue  # Skip if metadata is not found
+            continue
 
-        # Extract validation and requirement info
         is_required = meta_info['required']
         validation_info = meta_info['metadata_type'].get('validation_arguments', '')
         pattern = safe_load_json(validation_info) if validation_info else ""
 
-        # Check for required fields and validate pattern if necessary
         if is_required and not value.strip():
             error_messages.append(f"Field '{meta_info['metadata_type']['label']}' is required.")
             valid = False
@@ -229,7 +249,6 @@ def handle_submission(uploaded_file, doc_type_id, metadata_values):
             error_messages.append(f"Validation failed for {meta_info['metadata_type']['label']}: {value}")
             valid = False
 
-    # Display all error messages if any
     if error_messages:
         for msg in error_messages:
             st.error(msg)
@@ -237,9 +256,8 @@ def handle_submission(uploaded_file, doc_type_id, metadata_values):
     if valid:
         file_base64 = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
         file_name = uploaded_file.name
-        save_and_download_json(file_base64, file_name, doc_type_id, metadata_values)
+        save_and_download_json(file_base64, file_name, doc_type_id, cabinet, tag, metadata_values)
         st.success("Data saved and submitted successfully!")
-
 
 if __name__ == "__main__":
     main()
