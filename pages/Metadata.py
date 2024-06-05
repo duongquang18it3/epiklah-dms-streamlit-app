@@ -6,6 +6,20 @@ from PIL import Image, ImageFilter
 import fitz  # PyMuPDF
 import io
 import re
+st.set_page_config(layout="wide", page_title="Document Viewer App")
+custom_css = """
+<style>
+    
+    .stTextInput input:focus {
+        border: 3px solid #ff4b4b;
+        border-radius: 5px;
+        background-color: #d2e5f8;
+    }
+</style>
+"""
+
+# Inject custom CSS with the markdown hack
+st.markdown(custom_css, unsafe_allow_html=True)
 
 def safe_load_json(validation_arguments):
     try:
@@ -122,7 +136,7 @@ def send_data_to_api(json_data):
     response = requests.post(url, json=json_data, headers=headers)
     return response
 def main():
-    st.set_page_config(layout="wide", page_title="Document Viewer App")
+    
     st.markdown("<style>.reportview-container .main .block-container{max-width: 90%;}</style>", unsafe_allow_html=True)
 
     document_types = get_document_types()
@@ -161,10 +175,8 @@ def main():
 
     with col3_input_filed:
         if doc_type and uploaded_file:
-            
             metadata_types = get_metadata_types(doc_type_options[doc_type])
             metadata_values = {}
-
             for meta in metadata_types:
                 metadata_info = meta['metadata_type']
                 label = metadata_info['label']
